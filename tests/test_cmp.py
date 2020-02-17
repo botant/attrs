@@ -111,3 +111,49 @@ class TestCmpSpec(object):
 
         assert _D(ObjWithoutTruthValue(0), 1) < _D(ObjWithoutTruthValue(1), 2)
         assert _D(ObjWithoutTruthValue(2), 3) > _D(ObjWithoutTruthValue(1), 2)
+
+
+class TestCompare(object):
+    """
+    Tests for ``compare``.
+    """
+
+    def test_nonzero(self):
+        """
+        Test for nonzero.
+        """
+        cmp = attr.comparators.compare(nonzero=lambda result: result.value)
+
+        assert cmp(ObjWithoutTruthValue(1)) == cmp(ObjWithoutTruthValue(1))
+        assert cmp(ObjWithoutTruthValue(1)) != cmp(ObjWithoutTruthValue(2))
+
+        assert cmp(ObjWithoutTruthValue(1)) <= cmp(ObjWithoutTruthValue(2))
+        assert cmp(ObjWithoutTruthValue(2)) >= cmp(ObjWithoutTruthValue(1))
+
+        assert cmp(ObjWithoutTruthValue(1)) < cmp(ObjWithoutTruthValue(2))
+        assert cmp(ObjWithoutTruthValue(2)) > cmp(ObjWithoutTruthValue(1))
+
+    def test_key_casefold(self):
+        """
+        Test for key.
+        """
+        cmp = attr.comparators.compare(key=lambda value: value.lower())
+
+        assert cmp("abc") == cmp("abc")
+        assert cmp("abc") == cmp("ABC")
+
+        assert cmp("abc") >= cmp("ABC")
+        assert cmp("ABC") <= cmp("abc")
+
+        assert not (cmp("abc") > cmp("ABC"))
+        assert not (cmp("ABC") < cmp("abc"))
+
+    def test_key_abs(self):
+        """
+        Test for key.
+        """
+        cmp = attr.comparators.compare(key=abs)
+
+        assert cmp(1) == cmp(1)
+        assert cmp(1) == cmp(-1)
+        assert cmp(1) <= cmp(-3)

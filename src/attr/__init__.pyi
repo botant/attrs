@@ -17,6 +17,7 @@ from typing import (
 # `import X as X` is required to make these public
 from . import exceptions as exceptions
 from . import filters as filters
+from . import comparators as comparators
 from . import converters as converters
 from . import validators as validators
 
