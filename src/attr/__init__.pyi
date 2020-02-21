@@ -114,7 +114,7 @@ def attrib(
     kw_only: bool = ...,
     eq: Optional[bool] = ...,
     order: Optional[bool] = ...,
-    cmpspec: Optional[type] = ...,
+    comparator: Optional[type] = ...,
 ) -> Any: ...
 
 # This form catches an explicit None or no default and infers the type from the other arguments.
@@ -133,7 +133,7 @@ def attrib(
     kw_only: bool = ...,
     eq: Optional[bool] = ...,
     order: Optional[bool] = ...,
-    cmpspec: Optional[type] = ...,
+    comparator: Optional[type] = ...,
 ) -> _T: ...
 
 # This form catches an explicit default argument.
@@ -152,7 +152,7 @@ def attrib(
     kw_only: bool = ...,
     eq: Optional[bool] = ...,
     order: Optional[bool] = ...,
-    cmpspec: Optional[type] = ...,
+    comparator: Optional[type] = ...,
 ) -> _T: ...
 
 # This form covers type=non-Type: e.g. forward references (str), Any
@@ -171,7 +171,7 @@ def attrib(
     kw_only: bool = ...,
     eq: Optional[bool] = ...,
     order: Optional[bool] = ...,
-    cmpspec: Optional[type] = ...,
+    comparator: Optional[type] = ...,
 ) -> Any: ...
 @overload
 def attrs(
