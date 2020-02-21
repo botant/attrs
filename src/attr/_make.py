@@ -724,22 +724,7 @@ class _ClassBuilder(object):
         return self
 
     def _add_method_dunders(self, method):
-        """
-        Add __module__ and __qualname__ to a *method* if possible.
-        """
-        try:
-            method.__module__ = self._cls.__module__
-        except AttributeError:
-            pass
-
-        try:
-            method.__qualname__ = ".".join(
-                (self._cls.__qualname__, method.__name__)
-            )
-        except AttributeError:
-            pass
-
-        return method
+        return _add_method_dunders(self._cls, method)
 
 
 _CMP_DEPRECATION = (
@@ -1187,6 +1172,23 @@ def _make_hash(cls, attrs, frozen, cache_hash):
     )
 
     return locs["__hash__"]
+
+
+def _add_method_dunders(cls, method):
+    """
+    Add __module__ and __qualname__ to *method* if possible.
+    """
+    try:
+        method.__module__ = cls.__module__
+    except AttributeError:
+        pass
+
+    try:
+        method.__qualname__ = ".".join((cls.__qualname__, method.__name__))
+    except AttributeError:
+        pass
+
+    return method
 
 
 def _add_hash(cls, attrs):

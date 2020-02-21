@@ -1,146 +1,147 @@
 """
-Commonly useful comparators.
+Useful comparators.
 """
 
 from __future__ import absolute_import, division, print_function
 
 import functools
-import linecache
 
-from ._make import __ne__, _generate_unique_filename, attrib, attrs
-
-
-# def _make_operator(name, operation, key):
-#     """
-#     Creates a operator function.
-#     """
-#     name = "__%s__" % (name,)
-#
-#     unique_filename = _generate_unique_filename(_make_operator, name)
-#     lines = [
-#         "def %s(self, other):" % (name,),
-#         "    if other.value.__class__ is not self.value.__class__:",
-#         "        return NotImplemented",
-#         ]
-#
-#     if key:
-#         lines.append("    other_value = self._key(other.value)")
-#         lines.append("    self_value = self._key(self.value)")
-#     else:
-#         lines.append("    other_value = other.value")
-#         lines.append("    self_value = self.value")
-#
-#     lines.append("    return (other_value %s self_value)" % (operation,))
-#
-#     script = "\n".join(lines)
-#     global_vars = {}
-#     local_vars = {}
-#     bytecode = compile(script, unique_filename, "exec")
-#     eval(bytecode, global_vars, local_vars)
-#
-#     # In order of debuggers like PDB being able to step through the code,
-#     # we add a fake linecache entry.
-#     linecache.cache[unique_filename] = (
-#         len(script),
-#         None,
-#         script.splitlines(True),
-#         unique_filename,
-#     )
-#     return local_vars[name]
+from ._compat import iteritems
+from ._make import _add_method_dunders, attrib, make_class
 
 
-def _make_operator(name, operation, key):
+def _make_ne():
     """
-    Creates a operator function.
+    Create *not equal* method.
     """
-    name = "__%s__" % (name,)
 
-    unique_filename = _generate_unique_filename(_make_operator, name)
-    lines = [
-        "def %s(self, other):" % (name,),
-        "    if other.value.__class__ is not self.value.__class__:",
-        "        return NotImplemented",
-        "    if self._key:",
-        "        other_value = self._key(other.value)",
-        "        self_value = self._key(self.value)",
-        "    else:",
-        "        other_value = other.value",
-        "        self_value = self.value",
-        "    result = (self_value %s other_value)" % (operation,),
-        "    if self._nonzero:",
-        "        result = self._nonzero(result)",
-        "    return result",
-    ]
+    def __ne__(self, other):
+        """
+        Check equality and either forward a NotImplemented or
+        return the result negated.
+        """
+        result = self.__eq__(other)
+        if result is NotImplemented:
+            return NotImplemented
+        return not result
 
-    script = "\n".join(lines)
-    global_vars = {}
-    local_vars = {}
-    bytecode = compile(script, unique_filename, "exec")
-    eval(bytecode, global_vars, local_vars)
-
-    # In order of debuggers like PDB being able to step through the code,
-    # we add a fake linecache entry.
-    linecache.cache[unique_filename] = (
-        len(script),
-        None,
-        script.splitlines(True),
-        unique_filename,
-    )
-    return local_vars[name]
+    return __ne__
 
 
-# def _add_nonzero(nonzero):
-#     """
-#     Decorates an operation with a nonzero function.
-#     """
-#     def _nonzero_decorator(fcn):
-#         if nonzero:
-#             def __fcn__(self, other):
-#                 return nonzero(fcn(self, other))
-#             return __fcn__
-#         return fcn
-#
-#     return _nonzero_decorator
-
-
-def compare(key=None, nonzero=None, order=True, capture_exceptions=True):
+def using_key(key=None, order=True):
     """
     Creates a comparator class that applies *key* function to values *before*
-    comparing them, and applies *nonzero* to the result.
+    comparing them.
 
     :param callable key: A callable that applied to values before
         comparing them.
 
-        For example, use ``lambda value: value.casefold()`` to create a
+        For example, use `lambda value: value.casefold()` to create a
         comparator that compares values in a case insensitive way.
 
-    :param callable nonzero: A callable that applied to the result
-        of the comparison operation.
-
-        For example, use ``lambda value: value.all()`` to create a
-        comparator that is able to compare ``numpy arrays``.
-
-    :param bool order: If ``True`` (default), generate methods ``__lt__``,
-       ``__le__``, ``__gt__`` and ``__ge__``.
-
-    :param bool capture_exceptions: If ``True`` (default), exceptions raised
-       within comparison methods will be captured and treated as False.
+    :param bool order: If `True` (default), generate methods `__lt__`,
+       `__le__`, `__gt__` and `__ge__` using `functools.total_ordering`.
 
     .. versionadded:: attrs-20.1.0.dev0-botant.
     """
 
-    @attrs(slots=True, eq=False)
-    class Comparator(object):
-        value = attrib()
+    def __eq__(self, other):
+        """
+        Automatically created by attrs.
+        """
+        if other.__class__ is self.__class__:
+            return self._key(self.value) == self._key(other.value)
+        return NotImplemented
 
-    cls = Comparator
+    cls = make_class("Comparator", {"value": attrib()}, slots=True, eq=False)
     cls._key = staticmethod(key)
-    cls._nonzero = staticmethod(nonzero)
-    cls.__eq__ = _make_operator("eq", "==", key)
-    cls.__ne__ = __ne__
+    cls.__eq__ = _add_method_dunders(cls, __eq__)
+    cls.__ne__ = _add_method_dunders(cls, _make_ne())
 
     if order:
-        cls.__lt__ = _make_operator("lt", "<", key)
+
+        def __lt__(self, other):
+            """
+            Automatically created by attrs.
+            """
+            if other.__class__ is self.__class__:
+                return self._key(self.value) < self._key(other.value)
+            return NotImplemented
+
+        cls.__lt__ = _add_method_dunders(cls, __lt__)
         cls = functools.total_ordering(cls)
+
+    else:
+        cls = _add_not_implemented_ordering_dunders(cls)
+
+    return cls
+
+
+def using_functions(eq, lt=None, le=None, gt=None, ge=None):
+    """
+    Creates a comparator class that uses function *eq* for equality operators,
+    and *lt*, *le*, *gt*, *ge* for ordering operators.
+
+    If at least one of *lt*, *le*, *gt*, *ge* is provided, the other functions
+    are added with the help of `functools.total_ordering`.
+
+    All functions should take 2 arguments and return a `boolean`.
+
+    :param callable eq: Function called in `__eq__`.
+    :param callable lt: Function called in `__lt__`.
+    :param callable le: Function called in `__le__`.
+    :param callable gt: Function called in `__gt__`.
+    :param callable ge: Function called in `__ge__`.
+
+    .. versionadded:: attrs-20.1.0.dev0-botant.
+    """
+
+    def _create_method(func):
+        def __func__(self, other):
+            """
+            Automatically created by attrs.
+            """
+            if other.__class__ is self.__class__:
+                return func(self.value, other.value)
+            return NotImplemented
+
+        return __func__
+
+    cls = make_class("Comparator", {"value": attrib()}, slots=True, eq=False)
+    cls.__eq__ = _add_method_dunders(cls, _create_method(eq))
+    cls.__ne__ = _add_method_dunders(cls, _make_ne())
+
+    meth_count = 0
+    for name, meth in iteritems({"lt": lt, "le": le, "gt": gt, "ge": ge}):
+        if meth is not None:
+            meth_count += 1
+            setattr(
+                cls,
+                "__%s__" % (name,),
+                _add_method_dunders(cls, _create_method(meth)),
+            )
+
+    if meth_count == 0:
+        cls = _add_not_implemented_ordering_dunders(cls)
+    elif meth_count < 4:
+        cls = functools.total_ordering(cls)
+
+    return cls
+
+
+def _add_not_implemented_ordering_dunders(cls):
+    """
+    Add ordering dunders that return NotImplemented.
+    """
+
+    def __func__(self, other):
+        """
+        Automatically created by attrs.
+        """
+        return NotImplemented
+
+    cls.__lt__ = cls.__le__ = cls.__gt__ = cls.__ge__ = _add_method_dunders(
+        cls, __func__
+    )
 
     return cls
