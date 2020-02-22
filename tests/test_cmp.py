@@ -202,6 +202,7 @@ class TestUsingFunctions(object):
         """
         Cmp = attr.comparators.using_functions(
             eq=lambda x, y: x == y, **functions
+
         )
         assert Cmp(1) == Cmp(1)
         assert Cmp(1) != Cmp(-1)
