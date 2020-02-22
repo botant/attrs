@@ -3,6 +3,8 @@ Tests for equality and ordering methods from `attrib._make`
 when a comparator object is specified.
 """
 
+import functools
+
 import pytest
 
 from hypothesis import given
@@ -21,27 +23,27 @@ OrderC = simple_class(order=True)
 OrderCSlots = simple_class(order=True, slots=True)
 
 
-# ObjWithoutTruthValue is a simple object that has no truth value,
-# e.g. __eq__ returns something other than a boolean, and Python
-# tries to convert that non-boolean to a boolean by calling __bool__
-# (or __nonzero__ in Python 2) on it.
-#
-# We could simulate this behaviour by simply throwing an exception from __eq__,
-# but this complicated chain of events is more realistic because
-# it mimics what happens when we compare numpy arrays and pandas dataframes.
 @attr.s(eq=False)
-class ObjWithoutTruthValue(object):
+class ClassNoTruthValue(object):
+
+    """
+    ClassNoTruthValue mimics what happens when we compare `numpy arrays` and
+    `pandas dataframes`: we get back an object of the same type as the inputs
+    instead of a `boolean`. When this happens, Python tries to convert that
+    `non-boolean` to a `boolean` by calling `__bool__`
+    (or `__nonzero__` in Python 2) on it.
+    """
 
     value = attr.ib()
 
     def __eq__(self, other):
-        return ObjWithoutTruthValue(self.value == other.value)
+        return ClassNoTruthValue(self.value == other.value)
 
     def __lt__(self, other):
-        return ObjWithoutTruthValue(self.value < other.value)
+        return ClassNoTruthValue(self.value < other.value)
 
     def __bool__(self):
-        raise ValueError("ObjWithoutTruthValue has no truth value.")
+        raise ValueError("ClassNoTruthValue has no truth value.")
 
     __nonzero__ = __bool__  # Python 2
 
@@ -65,9 +67,9 @@ class TestComparator(object):
         Test for equality methods when attribute has not truth value.
         """
         with pytest.raises(ValueError):
-            cls(ObjWithoutTruthValue(1), 2) == cls(ObjWithoutTruthValue(1), 2)
+            cls(ClassNoTruthValue(1), 2) == cls(ClassNoTruthValue(1), 2)
         with pytest.raises(ValueError):
-            cls(ObjWithoutTruthValue(1), 2) != cls(ObjWithoutTruthValue(1), 2)
+            cls(ClassNoTruthValue(1), 2) != cls(ClassNoTruthValue(1), 2)
 
     @pytest.mark.parametrize("cls", [OrderC, OrderCSlots])
     def test_order_exception(self, cls):
@@ -75,129 +77,161 @@ class TestComparator(object):
         Test for ordering methods when attribute has not truth value.
         """
         with pytest.raises(ValueError):
-            cls(ObjWithoutTruthValue(1), 2) < cls(ObjWithoutTruthValue(2), 2)
+            cls(ClassNoTruthValue(1), 2) < cls(ClassNoTruthValue(2), 2)
         with pytest.raises(ValueError):
-            cls(ObjWithoutTruthValue(1), 2) > cls(ObjWithoutTruthValue(2), 2)
+            cls(ClassNoTruthValue(1), 2) > cls(ClassNoTruthValue(2), 2)
 
         with pytest.raises(ValueError):
-            cls(ObjWithoutTruthValue(1), 2) <= cls(ObjWithoutTruthValue(2), 2)
+            cls(ClassNoTruthValue(1), 2) <= cls(ClassNoTruthValue(2), 2)
         with pytest.raises(ValueError):
-            cls(ObjWithoutTruthValue(1), 2) >= cls(ObjWithoutTruthValue(2), 2)
+            cls(ClassNoTruthValue(1), 2) >= cls(ClassNoTruthValue(2), 2)
 
     @given(booleans())
     def test_comparator(self, slots):
         """
         Test for equality and ordering methods when attribute has comparator.
         """
-        _DCmp = attr.comparators.using_functions(
-            eq=ObjWithoutTruthValue.is_equal, lt=ObjWithoutTruthValue.less_than
-        )
 
-        _D = make_class(
-            "_D", {"a": attr.ib(comparator=_DCmp), "b": attr.ib()}, slots=slots
-        )
+        @functools.total_ordering
+        class Cmp(object):
+            def __init__(self, value):
+                self.value = value
 
-        assert _D(ObjWithoutTruthValue(1), 2) == _D(ObjWithoutTruthValue(1), 2)
-        assert _D(ObjWithoutTruthValue(1), 1) != _D(ObjWithoutTruthValue(1), 2)
-        assert _D(ObjWithoutTruthValue(2), 2) != _D(ObjWithoutTruthValue(1), 2)
+            def __eq__(self, other):
+                return ClassNoTruthValue.is_equal(self.value, other.value)
 
-        assert _D(ObjWithoutTruthValue(1), 2) >= _D(ObjWithoutTruthValue(1), 2)
-        assert _D(ObjWithoutTruthValue(1), 2) <= _D(ObjWithoutTruthValue(1), 2)
+            def __lt__(self, other):
+                return ClassNoTruthValue.less_than(self.value, other.value)
 
-        assert _D(ObjWithoutTruthValue(0), 1) < _D(ObjWithoutTruthValue(1), 2)
-        assert _D(ObjWithoutTruthValue(2), 3) > _D(ObjWithoutTruthValue(1), 2)
+            def __ne__(self, other):
+                return not self.__eq__(other)
+
+        C = make_class("C", {"a": attr.ib(comparator=Cmp)}, slots=slots)
+
+        assert C(ClassNoTruthValue(1)) == C(ClassNoTruthValue(1))
+        assert C(ClassNoTruthValue(2)) != C(ClassNoTruthValue(1))
+
+        assert C(ClassNoTruthValue(1)) >= C(ClassNoTruthValue(1))
+        assert C(ClassNoTruthValue(1)) <= C(ClassNoTruthValue(1))
+
+        assert C(ClassNoTruthValue(0)) < C(ClassNoTruthValue(1))
+        assert C(ClassNoTruthValue(2)) > C(ClassNoTruthValue(1))
 
 
-class TestComparatorUsingKey(object):
+class TestUsingKey(object):
     """
     Tests for `attr.comparators.using_key`.
     """
 
-    def test_lower(self):
+    def test_equality(self):
         """
-        Test using `string.lower`.
+        Test equality.
         """
-        # Create comparator without ordering
-        _DCmp = attr.comparators.using_key(
-            key=lambda value: value.lower(), order=False
-        )
-        assert _DCmp("abc") == _DCmp("abc")
-        assert _DCmp("abc") == _DCmp("ABC")
+        Cmp = attr.comparators.using_key(key=lambda value: value.lower())
+        assert Cmp("abc") == Cmp("abc")
+        assert Cmp("abc") == Cmp("ABC")
+
+    def test_ordering(self):
+        """
+        Test ordering.
+        """
+        Cmp = attr.comparators.using_key(key=abs)
+        assert Cmp(1) < Cmp(-3)
+        assert Cmp(1) > Cmp(0)
+
+        assert Cmp(1) >= Cmp(0)
+        assert Cmp(1) >= Cmp(1)
+        assert Cmp(1) <= Cmp(-1)
+        assert Cmp(1) <= Cmp(-2)
+
+    def test_no_ordering(self):
+        """
+        Test no ordering.
+        """
+        Cmp = attr.comparators.using_key(key=lambda x: x, order=False)
 
         if PY2:
-            # Python2 seems to interprets NotImplemented as False
-            assert not _DCmp("abc") > _DCmp("abc")
-            assert not _DCmp("abc") < _DCmp("abc")
-            assert not _DCmp("abc") >= _DCmp("abc")
-            assert not _DCmp("abc") <= _DCmp("abc")
+            assert not Cmp(2) > Cmp(1)
+            assert not Cmp(0) < Cmp(1)
+
+            assert not Cmp(1) >= Cmp(1)
+            assert not Cmp(1) <= Cmp(1)
         else:
-            # Ordering methods should not work since we specified order=False
             with pytest.raises(TypeError):
-                assert _DCmp("abc") > _DCmp("abc")
+                assert Cmp(2) > Cmp(1)
             with pytest.raises(TypeError):
-                assert _DCmp("abc") < _DCmp("abc")
+                assert Cmp(0) < Cmp(1)
             with pytest.raises(TypeError):
-                assert _DCmp("abc") >= _DCmp("abc")
+                assert Cmp(1) >= Cmp(1)
             with pytest.raises(TypeError):
-                assert _DCmp("abc") <= _DCmp("abc")
-
-    def test_abs(self):
-        """
-        Test using `abs`.
-        """
-        _DCmp = attr.comparators.using_key(key=abs)
-        assert _DCmp(1) == _DCmp(1)
-        assert _DCmp(1) == _DCmp(-1)
-        assert _DCmp(1) <= _DCmp(-3)
-        assert _DCmp(1) < _DCmp(-3)
-        assert not (_DCmp(1) != _DCmp(-1))
-        assert not (_DCmp(1) > _DCmp(-1))
+                assert Cmp(1) <= Cmp(1)
 
 
-class TestComparatorUsingFunctions(object):
+class TestUsingFunctions(object):
     """
     Tests for `attr.comparators.using_functions`.
     """
 
-    def test_lower(self):
+    def test_equality(self):
         """
-        Test using `string.lower`.
+        Test equality.
         """
-        # Create comparator without ordering
-        _DCmp = attr.comparators.using_functions(
-            eq=lambda obj, other: obj.lower() == other.lower()
+        # Usual equality
+        Cmp = attr.comparators.using_functions(eq=lambda x, y: x == y)
+        assert Cmp(1) == Cmp(1)
+        assert Cmp(1) != Cmp(-1)
+
+        # Weird equality, just for fun
+        Cmp = attr.comparators.using_functions(eq=lambda x, y: x == -y)
+        assert Cmp(1) != Cmp(1)
+        assert Cmp(1) == Cmp(-1)
+
+    @pytest.mark.parametrize(
+        "functions",
+        [
+            {"lt": lambda x, y: x < y},
+            {"le": lambda x, y: x <= y},
+            {"gt": lambda x, y: x > y},
+            {"ge": lambda x, y: x >= y},
+        ],
+    )
+    def test_ordering(self, functions):
+        """
+        Test ordering functions created as combinations of the input
+        functions.
+        """
+        Cmp = attr.comparators.using_functions(
+            eq=lambda x, y: x == y, **functions
         )
-        assert _DCmp("abc") == _DCmp("abc")
-        assert _DCmp("abc") == _DCmp("ABC")
+        assert Cmp(1) == Cmp(1)
+        assert Cmp(1) != Cmp(-1)
+
+        assert Cmp(1) < Cmp(3)
+        assert Cmp(1) > Cmp(0)
+
+        assert Cmp(1) >= Cmp(1)
+        assert Cmp(1) >= Cmp(0)
+        assert Cmp(1) <= Cmp(1)
+        assert Cmp(1) <= Cmp(3)
+
+    def test_no_ordering(self):
+        """
+        Test no ordering.
+        """
+        Cmp = attr.comparators.using_functions(eq=lambda x, y: x == y)
 
         if PY2:
-            # Python2 seems to interprets NotImplemented as False
-            assert not _DCmp("abc") > _DCmp("abc")
-            assert not _DCmp("abc") < _DCmp("abc")
-            assert not _DCmp("abc") >= _DCmp("abc")
-            assert not _DCmp("abc") <= _DCmp("abc")
-        else:
-            # Ordering methods should not work since we specified order=False
-            with pytest.raises(TypeError):
-                assert _DCmp("abc") > _DCmp("abc")
-            with pytest.raises(TypeError):
-                assert _DCmp("abc") < _DCmp("abc")
-            with pytest.raises(TypeError):
-                assert _DCmp("abc") >= _DCmp("abc")
-            with pytest.raises(TypeError):
-                assert _DCmp("abc") <= _DCmp("abc")
+            assert not Cmp(2) > Cmp(1)
+            assert not Cmp(0) < Cmp(1)
 
-    def test_abs(self):
-        """
-        Test using `abs`.
-        """
-        _DCmp = attr.comparators.using_functions(
-            eq=lambda obj, other: abs(obj) == abs(other),
-            lt=lambda obj, other: abs(obj) < abs(other),
-        )
-        assert _DCmp(1) == _DCmp(1)
-        assert _DCmp(1) == _DCmp(-1)
-        assert _DCmp(1) <= _DCmp(-3)
-        assert _DCmp(1) < _DCmp(-3)
-        assert not (_DCmp(1) != _DCmp(-1))
-        assert not (_DCmp(1) > _DCmp(-1))
+            assert not Cmp(1) >= Cmp(1)
+            assert not Cmp(1) <= Cmp(1)
+        else:
+            with pytest.raises(TypeError):
+                assert Cmp(2) > Cmp(1)
+            with pytest.raises(TypeError):
+                assert Cmp(0) < Cmp(1)
+            with pytest.raises(TypeError):
+                assert Cmp(1) >= Cmp(1)
+            with pytest.raises(TypeError):
+                assert Cmp(1) <= Cmp(1)

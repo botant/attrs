@@ -53,7 +53,9 @@ def using_key(key=None, order=True):
             return self._key(self.value) == self._key(other.value)
         return NotImplemented
 
-    cls = make_class("Comparator", {"value": attrib()}, slots=True, eq=False)
+    cls = make_class(
+        "Comparator", {"value": attrib()}, slots=True, eq=False, hash=True
+    )
     cls._key = staticmethod(key)
     cls.__eq__ = _add_method_dunders(cls, __eq__)
     cls.__ne__ = _add_method_dunders(cls, _make_ne())
@@ -107,7 +109,9 @@ def using_functions(eq, lt=None, le=None, gt=None, ge=None):
 
         return __func__
 
-    cls = make_class("Comparator", {"value": attrib()}, slots=True, eq=False)
+    cls = make_class(
+        "Comparator", {"value": attrib()}, slots=True, eq=False, hash=True
+    )
     cls.__eq__ = _add_method_dunders(cls, _create_method(eq))
     cls.__ne__ = _add_method_dunders(cls, _make_ne())
 

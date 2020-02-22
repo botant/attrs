@@ -39,6 +39,7 @@ _C = TypeVar("_C", bound=type)
 
 _ValidatorType = Callable[[Any, Attribute[_T], _T], Any]
 _ConverterType = Callable[[Any], _T]
+_ComparatorType = TypeVar["_ComparatorType"]
 _FilterType = Callable[[Attribute[_T], _T], bool]
 _ReprType = Callable[[Any], str]
 _ReprArgType = Union[bool, _ReprType]
