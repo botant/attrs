@@ -29,6 +29,7 @@ from attr._make import (
     _ClassBuilder,
     _CountingAttr,
     _determine_eq_order,
+    _determine_eq_order_for_attrib,
     _transform_attrs,
     and_,
     fields,
@@ -1630,3 +1631,33 @@ class TestDetermineEqOrder(object):
             "2021-06-01.  Please use `eq` and `order` instead."
             == w.message.args[0]
         )
+
+
+class TestDetermineEqOrderForAttrib(object):
+    def test_default(self):
+        """
+        If all are set to None, do the default: True, True
+        """
+        assert _determine_eq_order(
+            None, None, None
+        ) == _determine_eq_order_for_attrib(None, None, None, None)
+
+    def test_eq_mirrors_comparator(self):
+        """
+        If a comparator is specified, eq and order are True
+        """
+        assert (True, True) == _determine_eq_order_for_attrib(
+            None, None, None, True
+        )
+
+    @given(cmp=optional_bool, eq=optional_bool, comparator=optional_bool)
+    def test_mix(self, cmp, eq, comparator):
+        """
+        If comparator is not None, cmp and eq must be None and vice versa.
+        """
+        assume(comparator is not None and (cmp is not None or eq is not None))
+
+        with pytest.raises(
+            ValueError, match="Don't mix `comparator` with `cmp` and `eq'."
+        ):
+            _determine_eq_order_for_attrib(cmp, eq, None, comparator)

@@ -223,7 +223,7 @@ def attrib(
     .. versionadded:: 19.2.0 *eq* and *order*
     .. versionadded:: 20.1.0.dev0_botant *comparator*
     """
-    eq, order = _determine_eq_order(cmp, eq, order)
+    eq, order = _determine_eq_order_for_attrib(cmp, eq, order, comparator)
 
     if hash is not None and hash is not True and hash is not False:
         raise TypeError(
@@ -756,6 +756,30 @@ def _determine_eq_order(cmp, eq, order):
 
     if eq is False and order is True:
         raise ValueError("`order` can only be True if `eq` is True too.")
+
+    return eq, order
+
+
+def _determine_eq_order_for_attrib(cmp, eq, order, comparator):
+    """
+    Validate the combination of *cmp*, *eq*, *order* and *comparator*.
+    Derive the effective values of eq and order.
+    """
+    if comparator is not None and any((cmp is not None, eq is not None)):
+        raise ValueError("Don't mix `comparator` with `cmp` and `eq'.")
+
+    if comparator is None:
+        # If comparator is None, fall back on the default behaviour.
+        eq, order = _determine_eq_order(cmp, eq, order)
+    else:
+        # If a comparator is specified, then equality is on.
+        eq = True
+
+        # Unfortunately it is not possible to infer from the comparator class
+        # whether order should be True or False, so we assume order is on
+        # unless specified otherwise.
+        if order is None:
+            order = True
 
     return eq, order
 
