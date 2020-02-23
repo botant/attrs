@@ -123,19 +123,26 @@ class TestUsingKey(object):
     Tests for `attr.comparators.using_key`.
     """
 
-    def test_equality(self):
+    @given(booleans())
+    def test_equality(self, require_same_class):
         """
         Test equality.
         """
-        Cmp = attr.comparators.using_key(key=lambda value: value.lower())
+        Cmp = attr.comparators.using_key(
+            key=lambda value: value.lower(),
+            require_same_class=require_same_class,
+        )
         assert Cmp("abc") == Cmp("abc")
         assert Cmp("abc") == Cmp("ABC")
 
-    def test_ordering(self):
+    @given(booleans())
+    def test_ordering(self, require_same_class):
         """
         Test ordering.
         """
-        Cmp = attr.comparators.using_key(key=abs)
+        Cmp = attr.comparators.using_key(
+            key=abs, require_same_class=require_same_class
+        )
         assert Cmp(1) < Cmp(-3)
         assert Cmp(1) > Cmp(0)
 
@@ -166,23 +173,50 @@ class TestUsingKey(object):
             with pytest.raises(TypeError):
                 assert Cmp(1) <= Cmp(1)
 
+    def test_comparison_between_different_class(self):
+        """
+        Test comparison between different classes.
+        """
+        # require_same_class is True by default
+        Cmp = attr.comparators.using_key(key=lambda value: value)
+        if PY2:
+            assert not Cmp(1) == Cmp(1.0)
+            assert not Cmp(1) < Cmp(1.1)
+        else:
+            assert not Cmp(1) == Cmp(1.0)
+            with pytest.raises(TypeError):
+                assert Cmp(1) < Cmp(1.1)
+
+        # Setting require_same_class to False allows us
+        # to compare different types
+        Cmp = attr.comparators.using_key(
+            key=lambda value: value, require_same_class=False,
+        )
+        assert Cmp(1) == Cmp(1.0)
+        assert Cmp(1) < Cmp(1.1)
+
 
 class TestUsingFunctions(object):
     """
     Tests for `attr.comparators.using_functions`.
     """
 
-    def test_equality(self):
+    @given(booleans())
+    def test_equality(self, require_same_class):
         """
         Test equality.
         """
         # Usual equality
-        Cmp = attr.comparators.using_functions(eq=lambda x, y: x == y)
+        Cmp = attr.comparators.using_functions(
+            eq=lambda x, y: x == y, require_same_class=require_same_class
+        )
         assert Cmp(1) == Cmp(1)
         assert Cmp(1) != Cmp(-1)
 
         # Weird equality, just for fun
-        Cmp = attr.comparators.using_functions(eq=lambda x, y: x == -y)
+        Cmp = attr.comparators.using_functions(
+            eq=lambda x, y: x == -y, require_same_class=require_same_class
+        )
         assert Cmp(1) != Cmp(1)
         assert Cmp(1) == Cmp(-1)
 
@@ -195,14 +229,16 @@ class TestUsingFunctions(object):
             {"ge": lambda x, y: x >= y},
         ],
     )
-    def test_ordering(self, functions):
+    @given(booleans())
+    def test_ordering(self, functions, require_same_class):
         """
         Test ordering functions created as combinations of the input
         functions.
         """
         Cmp = attr.comparators.using_functions(
-            eq=lambda x, y: x == y, **functions
-
+            eq=lambda x, y: x == y,
+            require_same_class=require_same_class,
+            **functions
         )
         assert Cmp(1) == Cmp(1)
         assert Cmp(1) != Cmp(-1)
@@ -236,3 +272,30 @@ class TestUsingFunctions(object):
                 assert Cmp(1) >= Cmp(1)
             with pytest.raises(TypeError):
                 assert Cmp(1) <= Cmp(1)
+
+    def test_comparison_between_different_class(self):
+        """
+        Test comparison between different classes.
+        """
+        # require_same_class is True by default
+        Cmp = attr.comparators.using_functions(
+            eq=lambda obj, other: obj == other,
+            lt=lambda obj, other: obj < other,
+        )
+        if PY2:
+            assert not Cmp(1) == Cmp(1.0)
+            assert not Cmp(1) < Cmp(1.1)
+        else:
+            assert not Cmp(1) == Cmp(1.0)
+            with pytest.raises(TypeError):
+                assert Cmp(1) < Cmp(1.1)
+
+        # Setting require_same_class to False allows us
+        # to compare different types
+        Cmp = attr.comparators.using_functions(
+            eq=lambda obj, other: obj == other,
+            lt=lambda obj, other: obj < other,
+            require_same_class=False,
+        )
+        assert Cmp(1) == Cmp(1.0)
+        assert Cmp(1) < Cmp(1.1)

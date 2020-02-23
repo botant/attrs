@@ -28,9 +28,9 @@ def _make_ne():
     return __ne__
 
 
-def using_key(key=None, order=True):
+def using_key(key=None, order=True, require_same_class=True):
     """
-    Creates a comparator class that applies *key* function to values *before*
+    Create a comparator class that applies *key* function to values *before*
     comparing them.
 
     :param callable key: A callable that applied to values before
@@ -42,6 +42,10 @@ def using_key(key=None, order=True):
     :param bool order: If `True` (default), generate methods `__lt__`,
        `__le__`, `__gt__` and `__ge__` using `functools.total_ordering`.
 
+    :param bool require_same_class: If `True` (default), the generated
+       methods with return `NotImplemented` if the values being compared
+       are of different types.
+
     .. versionadded:: attrs-20.1.0.dev0-botant.
     """
 
@@ -49,7 +53,9 @@ def using_key(key=None, order=True):
         """
         Automatically created by attrs.
         """
-        if other.__class__ is self.__class__:
+        if (not require_same_class) or (
+            other.value.__class__ is self.value.__class__
+        ):
             return self._key(self.value) == self._key(other.value)
         return NotImplemented
 
@@ -66,7 +72,9 @@ def using_key(key=None, order=True):
             """
             Automatically created by attrs.
             """
-            if other.__class__ is self.__class__:
+            if (not require_same_class) or (
+                other.value.__class__ is self.value.__class__
+            ):
                 return self._key(self.value) < self._key(other.value)
             return NotImplemented
 
@@ -79,9 +87,11 @@ def using_key(key=None, order=True):
     return cls
 
 
-def using_functions(eq, lt=None, le=None, gt=None, ge=None):
+def using_functions(
+    eq, lt=None, le=None, gt=None, ge=None, require_same_class=True
+):
     """
-    Creates a comparator class that uses function *eq* for equality operators,
+    Create a comparator class that uses function *eq* for equality operators,
     and *lt*, *le*, *gt*, *ge* for ordering operators.
 
     If at least one of *lt*, *le*, *gt*, *ge* is provided, the other functions
@@ -95,6 +105,10 @@ def using_functions(eq, lt=None, le=None, gt=None, ge=None):
     :param callable gt: Function called in `__gt__`.
     :param callable ge: Function called in `__ge__`.
 
+    :param bool require_same_class: If `True` (default), the generated
+       methods with return `NotImplemented` if the values being compared
+       are of different types.
+
     .. versionadded:: attrs-20.1.0.dev0-botant.
     """
 
@@ -103,7 +117,9 @@ def using_functions(eq, lt=None, le=None, gt=None, ge=None):
             """
             Automatically created by attrs.
             """
-            if other.__class__ is self.__class__:
+            if (not require_same_class) or (
+                other.value.__class__ is self.value.__class__
+            ):
                 return func(self.value, other.value)
             return NotImplemented
 
